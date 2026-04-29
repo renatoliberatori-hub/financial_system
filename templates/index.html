@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meu Gerenciador Financeiro</title>
+    <!-- Bootstrap CSS local -->
+    <link href="{{ url_for('static', path='/css/bootstrap.min.css') }}" rel="stylesheet">
+    <!-- Chart.js Corrigido -->
+    <script src="{{ url_for('static', path='/css/chart-simples.js') }}"></script>
+
+    
+    <style>
+        .card { border-radius: 15px; border: none; margin-bottom: 20px; }
+        .bg-success { background-color: #28a745 !important; }
+        .bg-danger { background-color: #dc3545 !important; }
+        .bg-primary { background-color: #007bff !important; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .container { max-width: 900px; }
+    </style>
+</head>
+
+<body class="bg-ice">
+    <div class="container py-5">
+        <header class="pb-3 mb-4 border-bottom d-flex justify-content-between align-items-center">
+            <span class="card shadow-sm border-0 mb-1 bg-red-dark fs-2 fw-bold text-ice p-3">Resumo Financeiro - {{ usuario.username }}</span>
+            <a href="/logout" class="btn btn-outline-secondary btn-sm">Sair</a>
+        </header>
+
+
+        <form action="/" method="get" class="row g-2 mb-4 align-items-end">
+            <div class="col-auto">
+                <label class="small text-muted">Mês</label>
+                <select name="mes" class="form-select form-select-sm">
+                    {% for m in range(1, 13) %}
+                    <option value="{{ m }}" {{ 'selected' if m == mes_selecionado }}>{{ m }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <label class="small text-muted">Ano</label>
+                <input type="number" name="ano" class="form-control form-control-sm" value="{{ ano_selecionado }}">
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-sm btn-secondary">Filtrar</button>
+            </div>
+        </form>
+
+        <div class="mb-3">
+        <a href="/exportar" class="btn btn-sm btn-outline-success"> <i class="bi bi-file-earmark-excel"></i>📥 Baixar Resumo do Mês</a>
+        </div>    
+
+        <!-- Cards de Resumo -->
+        <div class="row g-4 mb-5">
+            <div class="col-md-4">
+                <div class="card shadow-sm border-0 bg-dark-blue text-white p-3">
+                    <h5>Receitas</h5>
+                    <h2 class="fw-bold">R$ {{ resumo.total_receitas }}</h2>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card shadow-sm border-0 bg-red-light text-white p-3">
+                    <h5>Despesas</h5>
+                    <h2 class="fw-bold">R$ {{ resumo.total_despesas }}</h2>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card shadow-sm border-0 bg-gray-blue text-white p-3">
+                    <h5>Saldo Atual</h5>
+                    <h2 class="fw-bold">R$ {{ resumo.saldo_atual }}</h2>
+                </div>
+            </div>
+        </div>
+
+
+        <!-- Gerenciar Categorias -->
+        <div class="card shadow-sm border-0 mb-4 bg-red-dark text-white">
+            <div class="card-body">
+                <h5 class="mb-3">Minhas Categorias</h5>
+                <form action="/categories/web" method="post" class="row g-2 align-items-center">
+                    <div class="col-auto">
+                        <input type="text" name="name" class="form-control form-control-sm" placeholder="Ex: Transporte" required>
+                    </div>
+                    <div class="col-auto">
+                        <button type="submit" class="btn btn-sm btn-outline-light">Criar Categoria</button>
+                    </div>
+                    <div class="col px-3">
+                        <span class="text-white-50 small fw-bold">Atuais: </span>
+                        {% for cat in categorias_disponiveis %}
+                        <span class="badge rounded-pill border border-white text-white fw-normal me-1">{{ cat.name }}</span>
+                        {% endfor %}
+                    </div>
+                </form>
+            </div>
+        </div>
+
+
+        <!-- Seção do Formulário e Gráfico -->
+        <div class="row mb-5">
+            <div class="col-md-8">
+                <!-- Nova Transação -->
+                <div class="card shadow-sm border-0 mb-5 bg-red-dark">
+                    <div class="card-body">
+                        <h4 class="mb-4">Nova Transação</h4>
+                        <form action="/transactions/web" method="post" class="row g-3">
+                            <!-- 1. Data (O novo campo!) -->
+                            <div class="col-md-4">
+                                <input type="date" name="date" class="form-control" value="{{ date_atual }}" required>
+                            </div>
+                            
+                            <!-- 2. Descrição -->
+                            <div class="col-md-4">
+                                <input type="text" name="description" class="form-control" placeholder="Descrição" required>
+                            </div>
+                                                        
+                            
+                            <!-- 3. Valor -->
+                            <div class="col-md-3">
+                                <input type="number" step="0.01" name="amount" class="form-control" placeholder="Valor" required>
+                            </div>
+                            
+                            <!-- 4. Categoria -->
+                            <div class="col-md-4">
+                                <select name="category_id" class="form-select" required>
+                                    <option value="" disabled selected>Categoria</option>
+                                    {% for cat in categorias_disponiveis %}
+                                    <option value="{{ cat.id }}">{{ cat.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <!-- Adicione entre o campo de Categoria e o de Tipo -->
+                            <div class="col-md-2">
+                                <!--<label class="small text-muted">Parcelas</label> -->                                
+                                <input type="number" name="repeats" class="form-control" value="1" min="1" max="60">
+                            </div>
+                            
+                            <!-- 5. Tipo -->
+                            <div class="col-md-4">
+                                <select name="type" class="form-select" required>
+                                    <option value="despesa">Despesa</option>
+                                    <option value="receita">Receita</option>
+                                </select>
+                            </div>
+                            
+                            <!-- 6. Botão -->
+                            <div class="col-md-2">
+                                <button type="submit" class="btn bg-dark-blue w-100">+</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Gráfico -->
+            <div class="col-md-4">
+                <div class="card shadow-sm border-0 h-100 bg-red-dark">
+                    <div class="card-body text-center">
+                        <h5 class="card-title mb-4">Gastos por Categoria</h5>
+                        <!-- Um elemento invisível para guardar os dados do Python -->
+                        <div id="dados-grafico" 
+                            data-labels='{{ labels_grafico | tojson }}' 
+                            data-valores='{{ valores_grafico | tojson }}' 
+                            style="display: none;">
+                        </div>
+                        <!-- Note o ID e o estilo para garantir visibilidade -->
+                        <div id="meuGrafico" style="min-height: 200px; width: 100%;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        
+
+        <!-- Histórico -->
+        <div class="card shadow-sm border-0 bg-red-dark">
+            <div class="card-body">
+                <h4 class="mb-4">Histórico de Transações</h4>
+                <div class="table-responsive bg-ice">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Descrição</th>
+                                <th>Categoria</th>
+                                <th>Tipo</th>
+                                <th class="text-end">Valor</th>
+                                <th class="text-center" style="width: 80px;">Ação</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for transacao in transacoes %}
+                            <tr>
+                                <td>{{ transacao.description }}</td>
+                                <td><span class="badge bg-secondary opacity-75">{{ transacao.category.name }}</span></td>
+                                <td>
+                                    <span class="badge {{ 'bg-dark-blue' if transacao.type == 'receita' else 'bg-red-light' }}">
+                                        {{ transacao.type | capitalize }}
+                                    </span>
+                                </td>
+                                <td class="text-end fw-bold {{ 'text-dark-blue' if transacao.type == 'receita' else 'text-red-light' }}">
+                                    R$ {{ transacao.amount }}
+                                </td>
+                                <td class="text-center">
+                                    <!-- Botão Editar -->
+                                    <a href="/transactions/edit/{{ transacao.id }}" class="btn btn-sm btn-outline-primary border-0 me-1">
+                                        ✏️
+                                    </a>
+                                    <form action="/transactions/delete/{{ transacao.id }}" method="post">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger border-0" onclick="return confirm('Excluir?')">🗑️</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div> <!-- Fecha Container -->
+
+    <!-- SCRIPT DO GRÁFICO (Sempre antes de fechar o body) -->
+    <script>
+        window.onload = function() {
+            const elemento = document.getElementById('dados-grafico');
+            
+            // Pegamos o texto e transformamos em lista de novo
+            const labels = JSON.parse(elemento.getAttribute('data-labels') || '[]');
+            const valores = JSON.parse(elemento.getAttribute('data-valores') || '[]');
+
+            if (labels.length > 0) {
+                new Chartist.Pie('#meuGrafico', { labels: labels, series: valores });
+            } else {
+                document.getElementById('meuGrafico').innerHTML = "<p class='text-muted mt-5'>Sem despesas.</p>";
+            }
+        };
+    </script>
+
+
+
+</body>
+</html>
